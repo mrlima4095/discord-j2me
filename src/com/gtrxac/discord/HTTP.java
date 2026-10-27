@@ -21,7 +21,7 @@ public class HTTP implements Strings {
 		try {
 			hc = (HttpConnection) MultiConnector.open(url);
 
-			queueItem.hc = hc;
+			queueItem.setConnection(hc);
 				
 			try {
 				hc.setRequestMethod(method);
@@ -53,7 +53,7 @@ public class HTTP implements Strings {
 				hc.setRequestProperty("Content-Length", String.valueOf(dataBytes.length));
 
 				os = hc.openOutputStream();
-				queueItem.os = os;
+				queueItem.setOutputStream(os);
 				os.write(dataBytes);
 			}
 
@@ -93,7 +93,7 @@ public class HTTP implements Strings {
 			int respCode = hc.getResponseCode();
 
 			is = hc.openInputStream();
-			queueItem.is = is;
+			queueItem.setInputStream(is);
 			byte[] result = Util.readBytes(is, (int) hc.getLength(), 1024, 2048);
 
 			// System.out.println("Response: '" + Util.bytesToString(result) + "'");

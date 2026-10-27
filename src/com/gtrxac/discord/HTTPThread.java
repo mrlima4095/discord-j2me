@@ -164,6 +164,9 @@ public class HTTPThread extends Thread implements Strings {
     void cancelFromUI(LoadingScreen screen) {
         if (screen != loadingScreen) return;
         canceled = true;
+        // Close the underlying connection first so a blocked network read
+        // returns immediately instead of keeping its slot until the timeout.
+        HTTPQueue.cancelFor(this);
         if (App.disp.getActualCurrent() == screen) {
             if (previousScreen != null) App.disp.setCurrent(previousScreen);
             else App.disp.setCurrent(MainMenu.get(false));
@@ -784,13 +787,13 @@ public class HTTPThread extends Thread implements Strings {
 
                         // note: forced proxy, different API from standard Discord API
                         httpConn = (HttpConnection) MultiConnector.open(HTTP.getFullUrl("/channels/" + id + "/upload", true));
-                        queueItem.hc = httpConn;
+                        queueItem.setConnection(httpConn);
 
                         httpConn.setRequestMethod(HttpConnection.POST);
                         httpConn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + BOUNDARY);
 
                         os = httpConn.openDataOutputStream();
-                        queueItem.os = os;
+                        queueItem.setOutputStream(os);
 
                         os.write(createFormPart("token", null));
                         os.write(Settings.token.getBytes());

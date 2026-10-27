@@ -14,10 +14,12 @@ public class Locale {
     public static long version;  // version number (modification date) of currently downloaded language data
 
     private static Vector strs;
+    private static Vector defaultStrs;
 
     private static Vector getDefaultStrings() {
+        if (defaultStrs != null) return defaultStrs;
         try {
-            return JSON.getArray(Util.readFile(
+            defaultStrs = JSON.getArray(Util.readFile(
 //#ifdef NOKIA_128PX
                 "/en-compact.json"
 //#else
@@ -29,6 +31,7 @@ public class Locale {
             e.printStackTrace();
             return new Vector();
         }
+        return defaultStrs;
     }
 
     private static void setStrings(Vector newStrs) {

@@ -14,6 +14,8 @@ public class WrapperCanvas extends Canvas implements CommandListener {
     boolean needUpdateCommands;
 
     private Command nowPlayingCommand;
+    private String nowPlayingLabel;
+    private boolean nowPlayingLabelCached;
 
     private static Command ashaPlaceholderCommand;
 
@@ -223,12 +225,20 @@ public class WrapperCanvas extends Canvas implements CommandListener {
         }
     }
 
+    private String getNowPlayingLabel() {
+        if (!nowPlayingLabelCached) {
+            nowPlayingLabel = App.hostBridge == null ? null : App.hostBridge.nowPlayingLabel();
+            nowPlayingLabelCached = true;
+        }
+        return nowPlayingLabel;
+    }
+
     /**
      * Adds the host's now-playing command to every Discord screen. The command
      * is owned by the wrapper because it is not part of any Discord screen.
      */
     private void updateNowPlayingCommand() {
-        String label = App.hostBridge == null ? null : App.hostBridge.nowPlayingLabel();
+        String label = getNowPlayingLabel();
         if (label == null || label.length() == 0) {
             if (nowPlayingCommand != null) {
                 removeCommand(nowPlayingCommand);
@@ -251,6 +261,7 @@ public class WrapperCanvas extends Canvas implements CommandListener {
     /** Rebuilds the host-specific commands after the bridge changes. */
     public void refreshHostCommands() {
         if (current == null) return;
+        nowPlayingLabelCached = false;
         needUpdateCommands = false;
         updateCommands_();
         updateCommandListener();

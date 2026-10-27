@@ -20,63 +20,141 @@ public class HTTPQueue implements Runnable {
 //#endif
 //#endif
 
+    /** Guards the queue and the per-thread mapping. Never held while sleeping or closing. */
+    private static final Object LOCK = new Object();
+
     private long timestamp;
-    public InputStream is;
-    public OutputStream os;
-    public HttpConnection hc;
+    private Thread owner;
+    private volatile boolean canceled;
+    public volatile InputStream is;
+    public volatile OutputStream os;
+    public volatile HttpConnection hc;
 
-    private static volatile Vector queueItems = new Vector(MAX_SLOTS);
-
-    static {
-        new Thread(new HTTPQueue()).start();
-    }
+    private static final Vector queueItems = new Vector(MAX_SLOTS);
+    private static final Hashtable activeByThread = new Hashtable();
+    private static Thread monitor;
 
     private HTTPQueue() {
         timestamp = System.currentTimeMillis();
     }
 
-    public static synchronized HTTPQueue newQueueItem() {
+    public static HTTPQueue newQueueItem() {
         // wait for available slot
-        while (queueItems.size() >= MAX_SLOTS) {
+        while (true) {
+            synchronized (LOCK) {
+                if (queueItems.size() < MAX_SLOTS) {
+                    HTTPQueue result = new HTTPQueue();
+                    result.owner = Thread.currentThread();
+                    queueItems.addElement(result);
+                    activeByThread.put(result.owner, result);
+                    ensureMonitor();
+                    return result;
+                }
+                ensureMonitor();
+            }
             // System.out.println("waiting, slots filled " + queueItems.size());
             Util.sleep(100);
         }
+    }
 
-        HTTPQueue result = new HTTPQueue();
-        queueItems.addElement(result);
-        return result;
+    /** Starts the queue monitor only when there is something to monitor. */
+    private static void ensureMonitor() {
+        if (monitor == null) {
+            monitor = new Thread(new HTTPQueue());
+            monitor.start();
+        }
+    }
+
+    public void setConnection(HttpConnection connection) {
+        hc = connection;
+        if (canceled) close(hc, null, null);
+    }
+
+    public void setInputStream(InputStream stream) {
+        is = stream;
+        if (canceled) close(null, stream, null);
+    }
+
+    public void setOutputStream(OutputStream stream) {
+        os = stream;
+        if (canceled) close(null, null, stream);
     }
 
     public void run() {
         while (true) {
-            long expireTime = System.currentTimeMillis() + TIMEOUT_MS;
-            int closedCount = 0;
+            Vector expired = null;
 
-            for (int i = 0; i < queueItems.size(); ) {
-                HTTPQueue item = (HTTPQueue) queueItems.elementAt(i);
-
-                if (item.timestamp >= expireTime) {
-                    item.close();
-                    queueItems.removeElementAt(i);
-                    closedCount++;
+            synchronized (LOCK) {
+                if (queueItems.isEmpty()) {
+                    monitor = null;
+                    return;
                 }
-                else i++;
+
+                long now = System.currentTimeMillis();
+                for (int i = 0; i < queueItems.size(); ) {
+                    HTTPQueue item = (HTTPQueue) queueItems.elementAt(i);
+
+                    if (now - item.timestamp >= TIMEOUT_MS) {
+                        queueItems.removeElementAt(i);
+                        if (item.owner != null && activeByThread.get(item.owner) == item) {
+                            activeByThread.remove(item.owner);
+                        }
+                        if (expired == null) expired = new Vector();
+                        expired.addElement(item);
+                    }
+                    else i++;
+                }
             }
 
-            // System.out.println("Checked connections, closed " + closedCount + ", currently " + queueItems.size());
+            if (expired != null) {
+                for (int i = 0; i < expired.size(); i++) {
+                    ((HTTPQueue) expired.elementAt(i)).close();
+                }
+            }
+
+            // System.out.println("Checked connections, currently " + queueItems.size());
             Util.sleep(5000);
         }
     }
 
+    /**
+     * Closes the active request started by the given thread, if any. Closing
+     * the connection unblocks a pending read/write on that thread.
+     * @return true if a queued request was found and canceled
+     */
+    public static boolean cancelFor(Thread thread) {
+        if (thread == null) return false;
+
+        HTTPQueue item;
+        synchronized (LOCK) {
+            item = (HTTPQueue) activeByThread.remove(thread);
+            if (item == null) return false;
+            queueItems.removeElement(item);
+        }
+
+        item.canceled = true;
+        item.close();
+        return true;
+    }
+
     private void close() {
+        close(hc, is, os);
+    }
+
+    private void close(HttpConnection connection, InputStream input, OutputStream output) {
         // System.out.println(this.toString() + " closed");
-        try { is.close(); } catch (Exception e) {}
-        try { os.close(); } catch (Exception e) {}
-        try { hc.close(); } catch (Exception e) {}
+        try { if (input != null) input.close(); } catch (Exception e) {}
+        try { if (output != null) output.close(); } catch (Exception e) {}
+        try { if (connection != null) connection.close(); } catch (Exception e) {}
     }
 
     public void finished() {
         close();
-        queueItems.removeElement(this);
+        synchronized (LOCK) {
+            queueItems.removeElement(this);
+            if (owner != null && activeByThread.get(owner) == this) {
+                activeByThread.remove(owner);
+            }
+        }
     }
 }
