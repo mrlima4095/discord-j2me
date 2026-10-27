@@ -267,8 +267,10 @@ public class App extends MIDlet implements Strings {
 
 	private static void stopGateway() {
 		GatewayThread oldGateway = gateway;
-		gateway = null;
+		// Stop the heartbeat and close the socket before clearing the static
+		// reference that those threads use.
 		if (oldGateway != null) oldGateway.stopQuietly();
+		if (gateway == oldGateway) gateway = null;
 	}
 
 	public static void loadFonts() {
