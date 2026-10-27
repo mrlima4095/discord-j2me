@@ -3,9 +3,13 @@ package com.gtrxac.discord;
 import javax.microedition.lcdui.*;
 import javax.microedition.lcdui.game.*;
 
-public class LoadingScreen extends MyCanvas implements Runnable, Strings {
+public class LoadingScreen extends MyCanvas implements Runnable, Strings, CommandListener {
     private int phoneOffset;
     private int bubbleOffset;
+
+    private HTTPThread owner;
+    private Object returnScreen;
+    private Command cancelCommand;
 
     volatile String text;
 //#ifdef EMOJI_SUPPORT
@@ -18,17 +22,36 @@ public class LoadingScreen extends MyCanvas implements Runnable, Strings {
     static Image[] phoneFrames;
     static Image[] bubbleFrames;
 
-    public LoadingScreen() {
+    public LoadingScreen(HTTPThread owner, Object returnScreen) {
         super();
+        this.owner = owner;
+        this.returnScreen = returnScreen;
         setTitle("Discord");
         text = Locale.get(LOADING);
         curFrame = 0;
         animDirection = 1;
 
+        cancelCommand = Locale.createCommand(CANCEL, Command.CANCEL, 0);
+        addCommand(cancelCommand);
+        setCommandListener(this);
+
         checkLoadFrames();
 
         // Start loading icon animation
         new Thread(this).start();
+    }
+
+    public void commandAction(Command c, Displayable d) {
+        if (c == cancelCommand) cancelOperation();
+    }
+
+    /** Aborts the pending request and returns to the previous screen. */
+    public void cancelOperation() {
+        if (owner != null) {
+            owner.cancelFromUI(this);
+            return;
+        }
+        if (returnScreen != null) App.disp.setCurrent(returnScreen);
     }
 
     private void checkLoadFrames() {

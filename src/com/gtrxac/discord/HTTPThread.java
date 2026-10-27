@@ -88,6 +88,11 @@ public class HTTPThread extends Thread implements Strings {
     private boolean hasSentMessage;
     static boolean hasSentMessageStatic;
 
+    /** Set when the user cancels the loading screen; later UI changes are discarded. */
+    private volatile boolean canceled;
+    private Object previousScreen;
+    private LoadingScreen loadingScreen;
+
     public HTTPThread(int action) {
         this.action = action;
         setPriority(Thread.MAX_PRIORITY);
@@ -148,7 +153,22 @@ public class HTTPThread extends Thread implements Strings {
     }
 
     private void setScreen(Object d) {
-        if (!silent) App.disp.setCurrent(d);
+        if (!silent && !canceled) App.disp.setCurrent(d);
+    }
+
+    /**
+     * Cancels the request from the loading screen. The network call may still
+     * finish in the background, but its result must not replace the screen that
+     * the user returned to.
+     */
+    void cancelFromUI(LoadingScreen screen) {
+        if (screen != loadingScreen) return;
+        canceled = true;
+        if (App.disp.getActualCurrent() == screen) {
+            if (previousScreen != null) App.disp.setCurrent(previousScreen);
+            else App.disp.setCurrent(MainMenu.get(false));
+        }
+        interrupt();
     }
 
     public void run() {
@@ -156,10 +176,12 @@ public class HTTPThread extends Thread implements Strings {
         App.dontShowLoadScreen = false;
 
         Object prevScreen = App.disp.getCurrent();
+        previousScreen = prevScreen;
         LoadingScreen loadScreen = null;
 
         if (showLoad) {
-            loadScreen = new LoadingScreen();
+            loadScreen = new LoadingScreen(this, prevScreen);
+            loadingScreen = loadScreen;
             App.disp.setCurrent(loadScreen);
         }
 
@@ -202,7 +224,7 @@ public class HTTPThread extends Thread implements Strings {
                 if (latest > App.VERSION_CODE && Settings.autoUpdate == Settings.AUTO_UPDATE_ALL) {
                     String latestName = resp.getString("_latestbetaname", Locale.get(NAME_UNKNOWN));
                     String latestChangelog = resp.getString("_bc", null);
-                    App.disp.setCurrent(new UpdateDialog(latestName, latestChangelog, true));
+                    setScreen(new UpdateDialog(latestName, latestChangelog, true));
                     return;
                 }
                 
@@ -211,7 +233,7 @@ public class HTTPThread extends Thread implements Strings {
                 if (latest > App.VERSION_CODE && Settings.autoUpdate != Settings.AUTO_UPDATE_OFF) {
                     String latestName = resp.getString("_latestname", Locale.get(NAME_UNKNOWN));
                     String latestChangelog = resp.getString("_c", null);
-                    App.disp.setCurrent(new UpdateDialog(latestName, latestChangelog, false));
+                    setScreen(new UpdateDialog(latestName, latestChangelog, false));
                     return;
                 }
 
@@ -494,7 +516,7 @@ public class HTTPThread extends Thread implements Strings {
                 }
 
                 case SEND_MESSAGE: {
-                    App.disp.setCurrent(App.channelView);
+                    setScreen(App.channelView);
                     setBannerText(Locale.get(CHANNEL_VIEW_SENDING));
 
                     String channelId = App.isDM ? App.selectedDmChannel.id : App.selectedChannel.id;
@@ -601,7 +623,7 @@ public class HTTPThread extends Thread implements Strings {
                     App.typingUsers = new Vector();
                     App.typingUserIDs = new Vector();
 
-                    App.disp.setCurrent(App.channelView);
+                    setScreen(App.channelView);
                     App.channelView.repaint();
 
                     // Play "Outgoing message" sound if gateway is off and channel was reloaded after sending a message
@@ -822,7 +844,7 @@ public class HTTPThread extends Thread implements Strings {
                     
                     MessageCopyBox copyBox = new MessageCopyBox(viewAttach.name, text);
                     copyBox.lastScreen = App.attachmentView;
-                    App.disp.setCurrent(copyBox);
+                    setScreen(copyBox);
                     break;
                 }
 
@@ -851,7 +873,7 @@ public class HTTPThread extends Thread implements Strings {
                             if (Settings.hasSeenEditError) {
                                 HTTP.post(path + "/edit", newMessage, true);
                             } else {
-                                App.disp.setCurrent(new EditErrorDialog(editMessage, editContent));
+                                setScreen(new EditErrorDialog(editMessage, editContent));
                                 setBannerText(null);
                                 break;
                             }
@@ -898,7 +920,7 @@ public class HTTPThread extends Thread implements Strings {
                             if (Settings.hasSeenEditError) {
                                 HTTP.get(path + "/delete", true);
                             } else {
-                                App.disp.setCurrent(new EditErrorDialog(editMessage));
+                                setScreen(new EditErrorDialog(editMessage));
                                 setBannerText(null);
                                 break;
                             }
@@ -982,7 +1004,7 @@ public class HTTPThread extends Thread implements Strings {
 
                     Locale.languageLoaded(langID, Util.bytesToString(langBytes));
                     if (App.disp.getCurrent() instanceof MainMenu) {
-                        App.disp.setCurrent(MainMenu.get(true));
+                        setScreen(MainMenu.get(true));
                     }
                     break;
                 }
@@ -1014,7 +1036,7 @@ public class HTTPThread extends Thread implements Strings {
                     // emoji data was already fetched (before the switch statement) so open emoji picker
                     EmojiPicker picker = new EmojiPicker();
                     picker.lastScreen = ((EmojiDownloadDialog) prevScreen).lastScreen;
-                    App.disp.setCurrent(picker);
+                    setScreen(picker);
                     break;
                 }
 //#endif
@@ -1022,7 +1044,7 @@ public class HTTPThread extends Thread implements Strings {
 //#ifdef OVER_100KB
                 case VIEW_ATTACHMENT_AUDIO: {
                     byte[] bytes = HTTP.getBytes(viewAttach.browserUrl);
-                    App.disp.setCurrent(new NotificationSoundDialog(viewAttach.name, bytes));
+                    setScreen(new NotificationSoundDialog(viewAttach.name, bytes));
                     break;
                 }
 
@@ -1031,7 +1053,7 @@ public class HTTPThread extends Thread implements Strings {
                     String text = Util.bytesToString(textBytes);
                     App.channelView.pendingTheme = JSON.getObject(text);
                     Theme.loadJsonTheme(App.channelView.pendingTheme);
-                    App.disp.setCurrent(App.channelView);
+                    setScreen(App.channelView);
                     break;
                 }
 
@@ -1059,6 +1081,7 @@ public class HTTPThread extends Thread implements Strings {
             }
         }
         catch (Exception e) {
+            if (canceled) return;
             switch (action) {
                 case FETCH_ICON: {
                     // remove active request for this icon so it can be requested again, but if the icon was not found, don't try again

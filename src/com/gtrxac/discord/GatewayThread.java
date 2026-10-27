@@ -62,7 +62,18 @@ public class GatewayThread extends Thread implements Strings
 		try { sc.close(); } catch (Exception e) {}
 	}
 
+	/** Stops the gateway without reconnecting or showing a disconnect notice. */
+	public void stopQuietly() {
+		stop = true;
+		stopMessage = null;
+		disconnect();
+	}
+
 	public void disconnected(String message) {
+		if (stop) {
+			disconnect();
+			return;
+		}
 		disconnect();
 		if (Settings.autoReConnect && reconnectAttempts < 3) {
 			if (App.channelView != null) {
@@ -144,6 +155,7 @@ public class GatewayThread extends Thread implements Strings
 	}
 
 	private void handleNotification(JSONObject msgData) {
+		if (App.economyMode) return;
 		Message msg = new Message(msgData);
 
 		// Display name of person who sent the message.
@@ -372,12 +384,17 @@ public class GatewayThread extends Thread implements Strings
 	}
 
 	public void run() {
+		if (stop) return;
 		try {
 //#ifdef PIGLER_SUPPORT
 			checkInitPigler();
 //#endif
 
 			sc = (SocketConnection) MultiConnector.openSocket(App.getPlatformSpecificUrl(Settings.gatewayUrl));
+			if (stop) {
+				disconnect();
+				return;
+			}
 
 			// Not supported on JBlend (e.g. some Samsungs)
 //#ifdef OVER_100KB

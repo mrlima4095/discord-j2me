@@ -299,6 +299,18 @@ public class Settings {
         defaultHotkeys = getBoolRecord(true);
         menuIconSize = getIntRecord(getBestMenuIconSize());
         language = getStringRecord(System.getProperty("microedition.locale"));
+//#ifdef EMBEDDED_HOST
+        // MIDPlay bundles Brazilian Portuguese as its only Portuguese
+        // translation. Normalize device locales such as pt, pt_BR or pt-PT so
+        // the complete pt-BR translation is used instead of the incomplete
+        // upstream pt file.
+        if (language != null) {
+            language = Util.replace(language, "_", "-");
+            if (language.toLowerCase().startsWith("pt")) {
+                language = "pt-BR";
+            }
+        }
+//#endif
         fullscreenDefault = getBoolRecord(false);
         fullscreenHotkey = getIntRecord(0);
         showNotifsAll = getBoolRecord(false);

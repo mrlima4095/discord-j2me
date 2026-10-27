@@ -5,8 +5,8 @@ package com.gtrxac.discord;
  *
  * A standalone build leaves this unset and keeps the normal Discord UI. An
  * embedded build can register a bridge to surface notifications outside the
- * Discord screens, save text into the host's notepad and show the host's
- * current track on Discord screens.
+ * Discord screens, save text into the host's notepad and open the host's
+ * player from a Discord command.
  */
 public interface HostBridge {
     /**
@@ -21,6 +21,9 @@ public interface HostBridge {
     /** Saves text as a host note, returning true on success. */
     boolean saveNote(String text);
 
-    /** Returns the host's current track label, or null when nothing is playing. */
-    String nowPlaying();
+    /** Returns the localized label for the host's now-playing command. */
+    String nowPlayingLabel();
+
+    /** Opens the host's player screen. */
+    void openNowPlaying();
 }

@@ -74,6 +74,11 @@ public class Locale {
     }
 
     private static Vector loadLanguage(String id) {
+//#ifdef EMBEDDED_HOST
+        // Only the Brazilian Portuguese translation is bundled with MIDPlay.
+        // Treat the generic Portuguese code as an alias for it.
+        if ("pt".equals(id)) id = "pt-BR";
+//#endif
         // Check if language exists
         boolean found = false;
         for (int i = 0; i < langIds.length; i++) {
@@ -154,15 +159,20 @@ public class Locale {
             return;
         }
 
+        String language = Util.replace(Settings.language, "_", "-");
+//#ifdef EMBEDDED_HOST
+        if (language.toLowerCase().startsWith("pt")) language = "pt-BR";
+//#endif
+
         // selected language is English (but not en-US) = don't load extra language data
-        String shortName = Settings.language.substring(0, 2);
-        if ("en".equals(shortName) && !"en-US".equals(Settings.language)) {
+        String shortName = language.substring(0, 2);
+        if ("en".equals(shortName) && !"en-US".equals(language)) {
             setStrings(null);
             return;
         }
 
         // try full language code (e.g. en-US.json)
-        Vector newStrs = loadLanguage(Settings.language);
+        Vector newStrs = loadLanguage(language);
 
         if (newStrs == null) {
             // try short language code (e.g. en.json)

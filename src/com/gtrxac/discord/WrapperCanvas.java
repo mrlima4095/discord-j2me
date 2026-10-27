@@ -7,11 +7,13 @@ import javax.microedition.lcdui.*;
 import com.nokia.mid.ui.LCDUIUtil;
 //#endif
 
-public class WrapperCanvas extends Canvas {
+public class WrapperCanvas extends Canvas implements CommandListener {
     public static WrapperCanvas instance;
     MyCanvas current;
     private Vector commands;
     boolean needUpdateCommands;
+
+    private Command nowPlayingCommand;
 
     private static Command ashaPlaceholderCommand;
 
@@ -91,31 +93,6 @@ public class WrapperCanvas extends Canvas {
             needUpdateCommands = false;
         }
         current.paint(g);
-        drawNowPlaying(g);
-    }
-
-    /** Draws the host's current track above the bottom edge of the screen. */
-    private void drawNowPlaying(Graphics g) {
-        if (App.hostBridge == null) return;
-        if (current instanceof Dialog || current instanceof TransitionScreen) return;
-
-        String text = App.hostBridge.nowPlaying();
-        if (text == null || text.length() == 0) return;
-
-        Font font = Font.getDefaultFont();
-        int barHeight = font.getHeight() + 4;
-        int bottom = current.getHeight();
-        int y = bottom - barHeight;
-
-        g.translate(-g.getTranslateX(), -g.getTranslateY());
-        g.setClip(0, 0, getWidth(), getHeight());
-        g.setFont(font);
-        g.setColor(Theme.listBackgroundColor);
-        g.fillRect(0, y, getWidth(), barHeight);
-        g.setColor(Theme.listDescriptionTextColor);
-        g.drawLine(0, y, getWidth(), y);
-        g.setColor(Theme.listTextColor);
-        g.drawString(text, 3, y + 2, Graphics.TOP | Graphics.LEFT);
     }
 
 //#ifdef TOUCH_SUPPORT
@@ -224,10 +201,12 @@ public class WrapperCanvas extends Canvas {
     private void updateCommands_() {  // cant use updateCommands name because kemulator would bug out
         if (Settings.useTransition && current instanceof TransitionScreen) return;
 
+        updateNowPlayingCommand();
+
         // delete old ones that don't belong to current screen
         for (int i = 0; i < commands.size(); ) {
             Command c = (Command) commands.elementAt(i);
-            if (!current.commands.contains(c)) {
+            if (c != nowPlayingCommand && !current.commands.contains(c)) {
                 removeCommand(c);
                 commands.removeElement(c);
             }
@@ -244,6 +223,50 @@ public class WrapperCanvas extends Canvas {
         }
     }
 
+    /**
+     * Adds the host's now-playing command to every Discord screen. The command
+     * is owned by the wrapper because it is not part of any Discord screen.
+     */
+    private void updateNowPlayingCommand() {
+        String label = App.hostBridge == null ? null : App.hostBridge.nowPlayingLabel();
+        if (label == null || label.length() == 0) {
+            if (nowPlayingCommand != null) {
+                removeCommand(nowPlayingCommand);
+                commands.removeElement(nowPlayingCommand);
+                nowPlayingCommand = null;
+            }
+            return;
+        }
+        if (nowPlayingCommand != null && label.equals(nowPlayingCommand.getLabel())) return;
+
+        if (nowPlayingCommand != null) {
+            removeCommand(nowPlayingCommand);
+            commands.removeElement(nowPlayingCommand);
+        }
+        nowPlayingCommand = new Command(label, Command.SCREEN, 100);
+        addCommand(nowPlayingCommand);
+        commands.addElement(nowPlayingCommand);
+    }
+
+    /** Rebuilds the host-specific commands after the bridge changes. */
+    public void refreshHostCommands() {
+        if (current == null) return;
+        needUpdateCommands = false;
+        updateCommands_();
+        updateCommandListener();
+        repaint();
+    }
+
+    public void commandAction(Command c, Displayable d) {
+        if (c == nowPlayingCommand) {
+            if (App.hostBridge != null) App.hostBridge.openNowPlaying();
+            return;
+        }
+        if (current != null && current.commandListener != null) {
+            current.commandListener.commandAction(c, d);
+        }
+    }
+
     public void updateFullscreen() {
         if (current != null) {
             setFullScreenMode(Util.ashaSeries == Util.ASHA_SERIES_NASP || current.isFullscreen);
@@ -251,7 +274,9 @@ public class WrapperCanvas extends Canvas {
     }
 
     public void updateCommandListener() {
-        if (current != null) setCommandListener(current.commandListener);
+        if (current == null) return;
+        if (nowPlayingCommand != null) setCommandListener(this);
+        else setCommandListener(current.commandListener);
     }
 
     public synchronized void setCurrent(MyCanvas d) {

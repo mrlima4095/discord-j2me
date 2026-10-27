@@ -67,6 +67,10 @@ public class LanguageSelector extends ListScreen implements CommandListener, Str
 
         if (c == SELECT_COMMAND) {
             Settings.language = Locale.langIds[getSelectedIndex()];
+//#ifdef EMBEDDED_HOST
+            // MIDPlay only bundles the complete Brazilian Portuguese file.
+            if ("pt".equals(Settings.language)) Settings.language = "pt-BR";
+//#endif
             Locale.setLanguage();
             Settings.save();
 

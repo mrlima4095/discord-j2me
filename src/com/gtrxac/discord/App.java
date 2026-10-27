@@ -119,6 +119,9 @@ public class App extends MIDlet implements Strings {
     /** Optional host hooks for embedded builds. */
     public static HostBridge hostBridge;
 
+    /** Battery-saving mode: while true no gateway or notification loop runs in the background. */
+    static boolean economyMode;
+
     private boolean started = false;
 
     public App() {
@@ -171,6 +174,7 @@ public class App extends MIDlet implements Strings {
 	public static boolean hasSeenGatewayWarningTemp;
 
 	public static void startGateway() {
+		if (economyMode) return;
 //#ifdef PROXYLESS_SUPPORT
 		if (
 			Settings.proxyless && !hasSeenGatewayWarningTemp && !Settings.hasSeenGatewayWarning
@@ -228,6 +232,7 @@ public class App extends MIDlet implements Strings {
 	/** Registers host hooks used by MIDPlay when Discord is embedded. */
 	public static void setHostBridge(HostBridge bridge) {
 		hostBridge = bridge;
+		if (WrapperCanvas.instance != null) WrapperCanvas.instance.refreshHostCommands();
 	}
 
 	/** Opens the channel where a host-side notification occurred. */
@@ -237,27 +242,33 @@ public class App extends MIDlet implements Strings {
 		notif.view();
 	}
 
-	private static Thread nowPlayingWatcher;
-	private static String lastNowPlaying;
+	/**
+	 * Turns Discord's background work on or off. Economy mode stops the gateway,
+	 * which is what keeps the notification system running after Discord closes.
+	 */
+	public static void setEconomyMode(boolean enabled) {
+		economyMode = enabled;
+		if (enabled) {
+			stopGateway();
+		}
+		else if (
+			instance != null &&
+			Settings.useGateway &&
+			Settings.token != null &&
+			Settings.token.trim().length() != 0
+		) {
+			startGateway();
+		}
+	}
 
-	/** Keeps the host track label on Discord screens up to date. */
-	static void startNowPlayingWatcher() {
-		if (hostBridge == null || nowPlayingWatcher != null) return;
-		nowPlayingWatcher = new Thread() {
-			public void run() {
-				while (hostBridge != null) {
-					String now = hostBridge.nowPlaying();
-					if (now == null) now = "";
-					if (!now.equals(lastNowPlaying)) {
-						lastNowPlaying = now;
-						if (WrapperCanvas.instance != null) WrapperCanvas.instance.repaint();
-					}
-					Util.sleep(2000);
-				}
-				nowPlayingWatcher = null;
-			}
-		};
-		nowPlayingWatcher.start();
+	public static boolean isEconomyMode() {
+		return economyMode;
+	}
+
+	private static void stopGateway() {
+		GatewayThread oldGateway = gateway;
+		gateway = null;
+		if (oldGateway != null) oldGateway.stopQuietly();
 	}
 
 	public static void loadFonts() {
