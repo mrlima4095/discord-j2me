@@ -188,6 +188,9 @@ public class HTTPThread extends Thread implements Strings {
             App.disp.setCurrent(loadScreen);
         }
 
+        // The user may cancel before the first request is queued.
+        if (canceled) return;
+
         // Fix HTTP error 404 - check that API URL does not end with a "/", which would cause duplicate "/"s in requested URLs
 //#ifdef OVER_100KB
         while (Settings.api.endsWith("/")) {
@@ -366,6 +369,9 @@ public class HTTPThread extends Thread implements Strings {
                 }
             }
 //#endif
+
+            // Avoid starting the main request after the loading screen was canceled.
+            if (canceled) return;
 
             switch (action) {
                 case FETCH_GUILDS: {
