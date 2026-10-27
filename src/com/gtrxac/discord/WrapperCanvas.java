@@ -91,6 +91,31 @@ public class WrapperCanvas extends Canvas {
             needUpdateCommands = false;
         }
         current.paint(g);
+        drawNowPlaying(g);
+    }
+
+    /** Draws the host's current track above the bottom edge of the screen. */
+    private void drawNowPlaying(Graphics g) {
+        if (App.hostBridge == null) return;
+        if (current instanceof Dialog || current instanceof TransitionScreen) return;
+
+        String text = App.hostBridge.nowPlaying();
+        if (text == null || text.length() == 0) return;
+
+        Font font = Font.getDefaultFont();
+        int barHeight = font.getHeight() + 4;
+        int bottom = current.getHeight();
+        int y = bottom - barHeight;
+
+        g.translate(-g.getTranslateX(), -g.getTranslateY());
+        g.setClip(0, 0, getWidth(), getHeight());
+        g.setFont(font);
+        g.setColor(Theme.listBackgroundColor);
+        g.fillRect(0, y, getWidth(), barHeight);
+        g.setColor(Theme.listDescriptionTextColor);
+        g.drawLine(0, y, getWidth(), y);
+        g.setColor(Theme.listTextColor);
+        g.drawString(text, 3, y + 2, Graphics.TOP | Graphics.LEFT);
     }
 
 //#ifdef TOUCH_SUPPORT

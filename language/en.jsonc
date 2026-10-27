@@ -1195,5 +1195,15 @@
 
     // Lines shown in the connection screen when searching for devices or when connecting to a found device.
     "Searching...",
-    "Connecting..."
+    "Connecting...",
+
+    // Softkey labels for saving the copied message content into the host app's notes.
+    "Save",
+    "Save to note",
+
+    // Confirmation shown after the copied message was saved into the host app's notes.
+    "Message saved to notes",
+
+    // Error shown when the copied message could not be saved into the host app's notes.
+    "Could not save the message to notes"
 ]

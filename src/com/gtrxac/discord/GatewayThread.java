@@ -215,6 +215,15 @@ public class GatewayThread extends Thread implements Strings
 		Notification notif = new Notification(guildID, channelID);
 
 		if (Settings.showNotifAlert) {
+//#ifdef EMBEDDED_HOST
+			// When Discord is closed, let the host surface the notification on
+			// top of its own screens (including other embedded subapps).
+			if (!App.active && App.hostBridge != null
+				&& App.hostBridge.showNotification(location, author, msg.content, guildID, channelID))
+			{
+				return;
+			}
+//#endif
 //#ifdef OVER_100KB
 			App.disp.setCurrent(new NotificationDialog(notif, location, msg));
 //#else

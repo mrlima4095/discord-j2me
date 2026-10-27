@@ -513,4 +513,8 @@ public interface Strings {
     static final int CONNECTION_HELP_BW_SERVER = 484;
     static final int CONNECTION_SEARCHING = 485;
     static final int CONNECTION_CONNECTING = 486;
+    static final int SAVE_TO_NOTE = 487;
+    static final int SAVE_TO_NOTE_L = 488;
+    static final int SAVE_TO_NOTE_DONE = 489;
+    static final int SAVE_TO_NOTE_ERROR = 490;
 }

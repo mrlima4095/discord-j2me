@@ -59,6 +59,20 @@ public class Locale {
      * @return Vector of strings for the specified language; null if language ID doesn't exist;
      *   null if language is not downloaded (in which case the language gets downloaded and languageLoaded is run after download is complete)
      */
+    private static Vector loadBundleLanguage(String id) {
+        String[] paths = {"/discord/" + id + ".json", "/" + id + ".json"};
+        for (int i = 0; i < paths.length; i++) {
+            try {
+                String data = Util.readFile(paths[i]);
+                if (data != null && data.length() != 0) {
+                    return JSON.getArray(data).toVector();
+                }
+            }
+            catch (Throwable e) {}
+        }
+        return null;
+    }
+
     private static Vector loadLanguage(String id) {
         // Check if language exists
         boolean found = false;
@@ -69,6 +83,11 @@ public class Locale {
             }
         }
         if (!found) return null;
+
+        // Prefer a language file bundled with the app, so an embedded build can
+        // ship a complete translation without depending on the proxy download.
+        Vector bundled = loadBundleLanguage(id);
+        if (bundled != null) return bundled;
 
         RecordStore langRms = null;
         Vector result = null;

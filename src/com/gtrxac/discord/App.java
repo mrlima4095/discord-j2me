@@ -116,6 +116,9 @@ public class App extends MIDlet implements Strings {
 
     public static App instance;
 
+    /** Optional host hooks for embedded builds. */
+    public static HostBridge hostBridge;
+
     private boolean started = false;
 
     public App() {
@@ -220,6 +223,41 @@ public class App extends MIDlet implements Strings {
 
 	public static boolean gatewayActive() {
 		return gateway != null && gateway.isAlive();
+	}
+
+	/** Registers host hooks used by MIDPlay when Discord is embedded. */
+	public static void setHostBridge(HostBridge bridge) {
+		hostBridge = bridge;
+	}
+
+	/** Opens the channel where a host-side notification occurred. */
+	public static void viewNotification(String guildID, String channelID) {
+		if (channelID == null) return;
+		Notification notif = new Notification(guildID, channelID);
+		notif.view();
+	}
+
+	private static Thread nowPlayingWatcher;
+	private static String lastNowPlaying;
+
+	/** Keeps the host track label on Discord screens up to date. */
+	static void startNowPlayingWatcher() {
+		if (hostBridge == null || nowPlayingWatcher != null) return;
+		nowPlayingWatcher = new Thread() {
+			public void run() {
+				while (hostBridge != null) {
+					String now = hostBridge.nowPlaying();
+					if (now == null) now = "";
+					if (!now.equals(lastNowPlaying)) {
+						lastNowPlaying = now;
+						if (WrapperCanvas.instance != null) WrapperCanvas.instance.repaint();
+					}
+					Util.sleep(2000);
+				}
+				nowPlayingWatcher = null;
+			}
+		};
+		nowPlayingWatcher.start();
 	}
 
 	public static void loadFonts() {
